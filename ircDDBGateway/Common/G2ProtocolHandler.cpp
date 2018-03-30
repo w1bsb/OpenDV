@@ -1,6 +1,6 @@
 /*
  *   Copyright (C) 2010,2011,2013 by Jonathan Naylor G4KLX
- *
+ *   Copyright (C) 2018 by Thomas A. Early N7TAE
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
  *   the Free Software Foundation; either version 2 of the License, or
@@ -39,6 +39,7 @@ m_port(0U)
 CG2ProtocolHandler::~CG2ProtocolHandler()
 {
 	delete[] m_buffer;
+	m_portmap.clear();
 }
 
 bool CG2ProtocolHandler::open()
@@ -55,8 +56,12 @@ bool CG2ProtocolHandler::writeHeader(const CHeaderData& header)
 	CUtils::dump(wxT("Sending Header"), buffer, length);
 #endif
 
+	in_addr addr = header.getYourAddress();
+	CPortHashMap::iterator found = m_portmap.find(addr.s_addr);
+	unsigned int port = (m_portmap.end()==found) ? header.getYourPort() : found->second;
+
 	for (unsigned int i = 0U; i < 5U; i++) {
-		bool res = m_socket.write(buffer, length, header.getYourAddress(), header.getYourPort());
+		bool res = m_socket.write(buffer, length, addr, port);
 		if (!res)
 			return false;
 	}
@@ -73,7 +78,11 @@ bool CG2ProtocolHandler::writeAMBE(const CAMBEData& data)
 	CUtils::dump(wxT("Sending Data"), buffer, length);
 #endif
 
-	return m_socket.write(buffer, length, data.getYourAddress(), data.getYourPort());
+	in_addr addr = data.getYourAddress();
+	CPortHashMap::iterator found = m_portmap.find(addr.s_addr);
+	unsigned int port = (m_portmap.end()==found) ? data.getYourPort() : found->second;
+
+	return m_socket.write(buffer, length, addr, port);
 }
 
 G2_TYPE CG2ProtocolHandler::read()
@@ -97,6 +106,9 @@ bool CG2ProtocolHandler::readPackets()
 		return false;
 
 	m_length = length;
+	
+	// save the incoming port (this is to enable mobile hot-spots
+	m_portmap[m_address.s_addr] = m_port;
 
 	if (m_buffer[0] != 'D' || m_buffer[1] != 'S' || m_buffer[2] != 'V' || m_buffer[3] != 'T') {
 		return true;
