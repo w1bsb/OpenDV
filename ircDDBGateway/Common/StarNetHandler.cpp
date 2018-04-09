@@ -1,5 +1,6 @@
 /*
  *   Copyright (C) 2011-2014 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2018 by Thomas A. Early N7TAE
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -469,6 +470,7 @@ void CStarNetHandler::process(CHeaderData &header)
 	unsigned int id = header.getId();
 
 	CStarNetUser* user = m_users[my];
+	bool islogin = false;
 
 	// Ensure that this user is in the cache
 	CUserData* userData = m_cache->findUser(my);
@@ -502,6 +504,7 @@ void CStarNetHandler::process(CHeaderData &header)
 			CStarNetId* tx = new CStarNetId(id, MESSAGE_DELAY, user);
 			tx->setLogin();
 			m_ids[id] = tx;
+			islogin = true;
 		} else {
 			user->reset();
 
@@ -562,12 +565,16 @@ void CStarNetHandler::process(CHeaderData &header)
 	header.setFlag3(0x00);
 
 #if defined(DEXTRA_LINK)
-	header.setRepeaters(m_linkGateway, m_linkReflector);
-	CDExtraHandler::writeHeader(this, header, DIR_OUTGOING);
+	if (! islogin) {
+		header.setRepeaters(m_linkGateway, m_linkReflector);
+		CDExtraHandler::writeHeader(this, header, DIR_OUTGOING);
+	}
 #endif
 #if defined(DCS_LINK)
-	header.setRepeaters(m_linkGateway, m_linkReflector);
-	CDCSHandler::writeHeader(this, header, DIR_OUTGOING);
+	if (! islogin) {
+		header.setRepeaters(m_linkGateway, m_linkReflector);
+		CDCSHandler::writeHeader(this, header, DIR_OUTGOING);
+	}
 #endif
 
 	// Get the home repeater of the user
@@ -623,7 +630,8 @@ void CStarNetHandler::process(CHeaderData &header)
 			break;
 	}
 
-	sendToRepeaters(header);
+	if (! islogin)
+		sendToRepeaters(header);
 
 	if (m_txMsgSwitch)
 		sendFromText(my);
@@ -693,7 +701,7 @@ void CStarNetHandler::process(CAMBEData &data)
 		}
 	}
 
-	if (id == m_id) {
+	if (id==m_id && ! tx->isLogin()) {
 #if defined(DEXTRA_LINK)
 		CDExtraHandler::writeAMBE(this, data, DIR_OUTGOING);
 #endif
@@ -892,7 +900,8 @@ bool CStarNetHandler::process(CHeaderData &header, DIRECTION, AUDIO_SOURCE)
 			break;
 	}
 
-	sendToRepeaters(header);
+	if (! tx->islogin())
+		sendToRepeaters(header);
 
 	if (m_txMsgSwitch)
 		sendFromText(my);
@@ -908,7 +917,12 @@ bool CStarNetHandler::process(CAMBEData &data, DIRECTION, AUDIO_SOURCE)
 
 	m_linkTimer.start();
 
-	sendToRepeaters(data);
+	CStarNetID *tx = m_ids[id];
+	if (tx) {
+		if (! tx->isLogin())
+			sendToRepeaters(data);
+	} else
+		sendToRepeaters(data);
 
 	if (data.isEnd()) {
 		m_linkTimer.stop();
