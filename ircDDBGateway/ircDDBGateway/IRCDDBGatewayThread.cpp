@@ -209,7 +209,7 @@ void CIRCDDBGatewayThread::run()
 		CDCSHandler::setDCSProtocolHandlerPool(m_dcsPool);
 	}
 
-	m_g2Handler = new CG2ProtocolHandler(G2_DV_PORT, m_gatewayAddress);
+	m_g2Handler = new CG2ProtocolHandler(G2_CLIENT_PORT, m_gatewayAddress);
 	ret = m_g2Handler->open();
 	if (!ret) {
 		wxLogError(wxT("Could not open the G2 protocol handler"));
